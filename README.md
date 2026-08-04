@@ -1,3 +1,30 @@
-A basic calculator application with a graphical user interface.
-It allows users to perform arithmetic operations such as addition, subtraction, multiplication, and division.
-It includes buttons to clear all, or one character from the screen.
+# Java Swing Calculator
+
+A desktop calculator built with Java Swing and a custom dark interface.
+
+## Features
+
+- Addition, subtraction, multiplication, and division
+- Decimal input and sign changes
+- Clear-all and backspace controls
+- Division-by-zero and invalid-input handling
+- Adaptive display text sizing
+- Structured operand and operator handling
+
+## Run locally
+
+Requires Java 17 or newer.
+
+```bash
+git clone https://github.com/danielTongu/Calculator-Java-App.git
+cd Calculator-Java-App
+javac Calculator.java
+java Calculator
+```
+
+## Technology
+
+- Java
+- Swing and AWT
+- Object-oriented design
+- Event-driven user interface programming
