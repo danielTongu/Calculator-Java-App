@@ -1,2 +1,42 @@
+# Java bytecode and generated build output
 *.class
+/out/
+/build/
+/target/
+/bin/
+/.gradle/
+
+# IntelliJ IDEA, Eclipse, NetBeans, and VS Code local configuration
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+/nbproject/private/
+.vscode/
+
+# Operating-system metadata
 .DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Editor backups and temporary files
+*~
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# Runtime logs and JVM crash diagnostics
+*.log
+hs_err_pid*
+replay_pid*
+
+# Local environment configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.sample
