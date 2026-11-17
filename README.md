@@ -8,9 +8,9 @@ Lab 1: Integer Calculator
 
 ## Abstract
 
-This project implements a desktop calculator using Java Swing. The modernized application provides a dark interface, rounded controls, separate expression and result displays, keyboard input, and a resizable window. A presentation-independent calculation model manages input transitions and evaluates decimal arithmetic. Automated regression checks verify arithmetic, editing, operator selection, and error recovery. Although the original lab is named Integer Calculator, this implementation also supports decimal operands and fractional results.
+This project implements a desktop calculator using Java Swing. The modernized application provides a dark interface, rounded controls, separate expression and result displays, keyboard input, and a resizable window. A presentation-independent calculation model manages input transitions and evaluates integer arithmetic. Automated regression checks verify arithmetic, editing, operator selection, and error recovery. The implementation follows the lab’s integer-only requirement: division discards the fractional part toward zero, and decimal input is disabled.
 
-**Index Terms—** Java, Swing, desktop application, calculator, decimal arithmetic, software testing.
+**Index Terms—** Java, Swing, desktop application, calculator, integer arithmetic, software testing.
 
 ## I. Introduction
 
@@ -23,12 +23,12 @@ This README uses an IEEE-inspired technical-report structure. It is Markdown doc
 | Capability | Behavior |
 | --- | --- |
 | Arithmetic | Addition, subtraction, multiplication, and division |
-| Decimal entry | Leading zero for decimal-only entry; duplicate decimal points ignored |
+| Integer arithmetic | Integer operands and results; `5 ÷ 2 = 2` and `−5 ÷ 2 = −2` |
 | Unary minus | The minus key negates at the start or after an operator or opening parenthesis |
 | Parentheses | Explicit grouping, including nested expressions |
-| Percentage | Divides the current value by 100 |
 | Clear all | Resets the value, expression, pending operation, and error |
-| Delete | `C` or Backspace removes the last expression character; clears a result or error |
+| Exponentiation | `xʸ` or `^` raises an integer base to a nonnegative integer exponent |
+| Backspace | Removes one expression character; clears a result or error |
 | Expression display | Shows the pending operation or completed calculation |
 | Error recovery | Division by zero displays an explanation; a digit or clear starts again |
 | Input length | Accepts up to 16 entered digits per operand |
@@ -38,27 +38,38 @@ This README uses an IEEE-inspired technical-report structure. It is Markdown doc
 
 ### A. Presentation Layer
 
-`Calculator.java` constructs the Swing window on the event dispatch thread. The interface uses a dark background, orange digit keys, brown arithmetic keys with gold symbols, gray parentheses and decimal keys, a blue delete key (`C`), a pink clear-all key (`AC`), and a gold equals key. Rounded surfaces provide hover, pressed, and focus feedback. The on-screen heading is omitted; the native window title remains Calculator. The result font shrinks as text grows. Very long results remain selectable and horizontally scrollable in the display. The window starts at 400 × 620 pixels and permits resizing above a 570 × 560 minimum.
+`Calculator.java` constructs the Swing window on the event dispatch thread. The interface uses a dark background, orange digit keys, brown arithmetic keys (`+`, `−`, `×`, `÷`, and `xʸ`) with gold symbols, gray parentheses and backspace keys, a pink clear-all key (`AC`), and a gold equals key. Rounded surfaces provide hover, pressed, and focus feedback. The on-screen heading is omitted; the native window title remains Calculator. The result font shrinks as text grows. Very long results remain selectable and horizontally scrollable in the display. The window starts at 400 × 620 pixels and permits resizing above a 360 × 560 minimum.
 
-Buttons and keyboard shortcuts invoke the same command action. The expression line supplies context without mixing the pending expression into the editable operand state.
+
+| Button group | Background | Label |
+| --- | --- | --- |
+| Digits `0`–`9` | Orange | Dark |
+| Arithmetic `+`, `−`, `×`, `÷`, `xʸ` | Brown | Gold |
+| Parentheses and backspace | Gray | White |
+| Reset `AC` | Pink | Dark |
+| Equals `=` | Gold | Dark |
+
+`CalculatorButton.java` owns rounded painting and a single `KeyStyle` definition pairing the background and foreground of each button group. `Calculator.java` owns widget layout, accessible labels, and input actions. Buttons and keyboard shortcuts invoke the same command action. The expression line supplies context without mixing the pending expression into the editable operand state.
 
 ### B. Calculation Model
 
-`CalculatorModel.java` maintains the entered expression, displayed value, completion state, and error state. Its nested `ExpressionParser` evaluates sums, products, unary minus, decimal values, parentheses, and postfix percentages using recursive descent. It has no Swing dependency and can therefore be verified without opening a desktop window.
+`CalculatorModel.java` maintains the entered expression, displayed value, completion state, and error state. It delegates expression evaluation to `ExpressionEvaluator.java`, which parses sums, products, unary minus, integer values, parentheses, and right-associative exponentiation using recursive descent. It has no Swing dependency and can therefore be verified without opening a desktop window.
 
-Arithmetic uses `BigDecimal`. Addition, subtraction, and multiplication preserve decimal precision. Division uses `MathContext.DECIMAL64`, which provides 16 significant digits with half-even rounding. Results omit unnecessary trailing zeros and use ordinary decimal notation.
+The required `Arithmetic.java` utility class exposes the four required documented static methods: `addition`, `subtraction`, `multiplication`, and `division`. It also provides `exponentiation` for the power key. The class uses the conventional spelling `Arithmetic`; the PDF spells it `Arthimetic`. This naming correction is intentional. All arithmetic uses `BigInteger`, preserving integer results without fixed-width overflow. Division truncates toward zero at each division operation; for example, `5÷2×2` produces `4`. The evaluator delegates binary arithmetic and exponentiation to this class. Unary negation remains in the parser.
 
 ### C. Evaluation Rules
 
-- Parentheses evaluate first, followed by unary minus, multiplication and division, then addition and subtraction. For example, `2 + 3 × 4 =` produces `14`, while `(2 + 3) × 4 =` produces `20`.
-- The large operand display includes unary negation during entry, including negative decimals and operands after operators. A pending unary minus displays `-0`. Binary subtraction stays in the expression line.
+- Parentheses and exponentiation evaluate first, followed by unary minus, multiplication and division, then addition and subtraction. For example, `2 + 3 × 4 =` produces `14`, while `(2 + 3) × 4 =` produces `20`.
+- The large operand display includes unary negation during entry, including negative operands after operators. A pending unary minus displays `-0`. Binary subtraction stays in the expression line.
 - The same minus key represents subtraction and negation: `−5`, `2 × −5`, `2 − −5`, and `−(2 + 3)` are valid.
 - Consecutive non-minus binary operators replace the pending operator. Minus is entered as unary negation when an operand is expected.
 - Parentheses must balance before evaluation. A number or closing group followed by an opening parenthesis implies multiplication: `2(3+4)` gives `14`, and `(1+2)(3+4)` gives `21`. Explicit operators before a group also work, such as `2+(3+4)` and `2×(3+4)`. Implicit multiplication has the same precedence as explicit multiplication and division, evaluated from left to right; `8÷2(2+2)` gives `16`.
 - Equals evaluates the complete expression and preserves a trailing equals sign in the expression line. Incomplete expressions report an error. Repeated equals leaves the result unchanged.
-- Entering a digit, decimal point, or opening parenthesis after a result starts a new expression. Selecting an operator continues from the result.
-- Percentage divides the preceding number or parenthesized group by 100; it remains available through the `%` keyboard shortcut.
-- `C` and Backspace delete one expression character. After a result or error, they reset the calculator. `AC`, Escape, and Delete always reset all state.
+- Entering a digit or opening parenthesis after a result starts a new expression. Selecting an operator continues from the result.
+- Decimal points and percent commands are ignored and have no keypad controls. Each typed operand is limited to 16 digits; expression entry is limited to 256 characters to bound parser nesting. Computed results can be longer.
+- `xʸ` enters the exponent operator `^`. Examples: `2^3 = 8`, `(2+3)^4 = 625`, and `2^(2+3) = 32`. Powers associate from right to left: `2^3^2 = 512`. Exponentiation binds before unary minus: `−3^2 = −9`, while `(−3)^2 = 9`. After a result, select `xʸ`, enter an exponent, then equals.
+- Exponents must evaluate to integers from 0 through 10000. Negative exponents report an error to preserve integer-only arithmetic. `0^0` returns `1`. Estimated power results are capped at one million bits to keep evaluation bounded.
+- Backspace deletes one expression character. After a result or error it resets the calculator. `AC`, Escape, and Delete always reset all state.
 
 ### D. Application Flow
 
@@ -70,12 +81,12 @@ flowchart TD
     Build --> Wait[Wait for button or keyboard input]
     Wait --> Command[CommandAction calls model.accept]
     Command --> Clear{Clear or delete?}
-    Clear -->|Yes| Reset[Reset state or delete expression character]
-    Clear -->|No| Digit{Digit, decimal, or opening group?}
+    Clear -->|Yes| Reset[Reset state or delete character]
+    Clear -->|No| Digit{Digit or opening group?}
     Digit -->|Yes| Enter[Recover or start new expression and enter value]
     Digit -->|No| Error{Error active?}
     Error -->|Yes| Refresh[Refresh expression and result]
-    Error -->|No| Dispatch[Apply closing group, percent, operator, or equals]
+    Error -->|No| Dispatch[Apply closing group, operator, or equals]
     Reset --> Refresh
     Enter --> Refresh
     Dispatch --> Refresh
@@ -87,7 +98,7 @@ flowchart TD
 
 ### E. UML Class Diagram
 
-The diagram shows the application classes, selected members, and Swing inheritance. `CommandAction` is a non-static inner class of `Calculator`; `RoundedButton` and `ExpressionParser` are static nested classes in their respective enclosing classes. Swing widgets and internal helper methods are omitted for clarity.
+The diagram shows the application classes, selected members, and Swing inheritance. `CommandAction` remains an inner class of `Calculator`; the button’s private `KeyStyle` enum centralizes color grouping. Swing widgets and internal helpers are omitted for clarity. The model owns input state, the evaluator owns expression grammar, and `Arithmetic` owns numeric operations.
 
 ```mermaid
 classDiagram
@@ -116,32 +127,41 @@ classDiagram
         ~CommandAction(String command)
         +actionPerformed(ActionEvent event) void
     }
-    class RoundedButton {
+    class CalculatorButton {
         -Color fill
-        ~RoundedButton(String text, Color fill)
+        ~CalculatorButton(String text)
         #paintComponent(Graphics graphics) void
     }
     class CalculatorModelTest {
         +main(String[] args)$ void
         -check(String name, String expected, String commands)$ void
     }
-    class ExpressionParser {
+    class ExpressionEvaluator {
         -String source
         -int position
-        ~parse() BigDecimal
-        -sum() BigDecimal
-        -product() BigDecimal
-        -unary() BigDecimal
-        -primary() BigDecimal
+        ~evaluate(String expression)$ BigInteger
+        -sum() BigInteger
+        -product() BigInteger
+        -unary() BigInteger
+        -power() BigInteger
+        -primary() BigInteger
     }
-    CalculatorModel ..> ExpressionParser : evaluates with
+    class Arithmetic {
+        +addition(BigInteger first, BigInteger second)$ BigInteger
+        +subtraction(BigInteger first, BigInteger second)$ BigInteger
+        +multiplication(BigInteger first, BigInteger second)$ BigInteger
+        +division(BigInteger first, BigInteger second)$ BigInteger
+        +exponentiation(BigInteger base, BigInteger exponent)$ BigInteger
+    }
+    ExpressionEvaluator ..> Arithmetic : delegates arithmetic
+    CalculatorModel ..> ExpressionEvaluator : evaluates with
     class AbstractAction
     class JButton
     Calculator "1" *-- "1" CalculatorModel : owns
     Calculator "1" *-- "many" CommandAction : creates
-    Calculator ..> RoundedButton : creates
+    Calculator ..> CalculatorButton : creates
     AbstractAction <|-- CommandAction
-    JButton <|-- RoundedButton
+    JButton <|-- CalculatorButton
     CommandAction --> Calculator : enclosing instance
     CalculatorModelTest ..> CalculatorModel : verifies
 ```
@@ -155,21 +175,22 @@ The sequence assumes `2` and `+` have already been entered. Entering `3` supplie
 ```mermaid
 sequenceDiagram
     actor User
-    participant Action as CommandAction
-    participant Model as CalculatorModel
     participant View as Calculator
-    User->>Action: Press 3
-    Action->>Model: accept("3")
-    Model->>Model: enterValue("3")
-    Action->>View: refresh()
-    View->>Model: getDisplay(), getExpression()
+    participant Model as CalculatorModel
+    participant Evaluator as ExpressionEvaluator
+    participant Arithmetic
+    User->>View: Press 3
+    View->>Model: CommandAction calls accept("3")
+    View->>Model: refresh reads display and expression
     Model-->>View: "3", "2+3"
-    User->>Action: Press equals
-    Action->>Model: accept("=")
-    Model->>Model: finish() then ExpressionParser.parse()
-    Model->>Model: Store result 5 and completed expression
-    Action->>View: refresh()
-    View->>Model: getDisplay(), getExpression()
+    User->>View: Press equals
+    View->>Model: CommandAction calls accept("=")
+    Model->>Evaluator: evaluate("2+3")
+    Evaluator->>Arithmetic: addition(2, 3)
+    Arithmetic-->>Evaluator: 5
+    Evaluator-->>Model: 5
+    Model->>Model: Store result and completed expression
+    View->>Model: refresh reads display and expression
     Model-->>View: "5", "2+3 ="
 ```
 
@@ -187,7 +208,7 @@ From the project directory:
 
 ```bash
 mkdir -p out
-javac --release 17 -Xlint:all -d out Calculator.java CalculatorModel.java
+javac --release 17 -Xlint:all -d out Arithmetic.java Calculator.java CalculatorButton.java CalculatorModel.java ExpressionEvaluator.java
 java -cp out Calculator
 ```
 
@@ -196,10 +217,9 @@ java -cp out Calculator
 | Key | Action |
 | --- | --- |
 | `0`–`9` | Enter digits |
-| `.` | Enter decimal point |
 | `+`, `-`, `*`, `/` | Enter arithmetic operation; minus also negates |
+| `^` | Enter exponentiation |
 | `(`, `)` | Open or close an expression group |
-| `%` | Divide preceding value or group by 100 |
 | `Enter` or `=` | Evaluate |
 | `Backspace` | Delete last expression character; reset a result or error |
 | `Escape` or `Delete` | Clear all |
@@ -207,34 +227,62 @@ java -cp out Calculator
 
 ## V. Verification
 
-`CalculatorModelTest.java` supplies 57 dependency-free regression checks. Run them with:
+`CalculatorModelTest.java` supplies 92 dependency-free regression checks. Run them with:
 
 ```bash
 mkdir -p out
-javac --release 17 -Xlint:all -d out Calculator.java CalculatorModel.java CalculatorModelTest.java
+javac --release 17 -Xlint:all -d out Arithmetic.java Calculator.java CalculatorButton.java CalculatorModel.java ExpressionEvaluator.java CalculatorModelTest.java
 java -Djava.awt.headless=true -cp out CalculatorModelTest
 ```
 
 Successful execution prints:
 
 ```text
-Passed 57 calculator regression checks.
+Passed 92 calculator regression checks.
 ```
 
-The checks cover arithmetic, decimal precision, precedence, implicit multiplication, explicit operators before groups, nested parentheses, unary minus, negative operands, operator replacement, expression editing, percentages, invalid expressions, division by zero, recovery, result continuation, the input limit, and retention of the displayed equals sign.
+The checks cover arithmetic, integer division truncation, precedence, implicit multiplication, explicit operators before groups, nested parentheses, unary minus, negative operands, operator replacement, exponentiation of numbers, groups, and results, right associativity, negative-exponent rejection, power limits, expression editing, deletion of the last operand digit, keyboard and button exponent commands, repeated operator clicks, unsupported decimal/percent input, large integer results, invalid expressions, division by zero, recovery, result continuation, the input limit, and retention of the displayed equals sign.
 
-Compilation with Java 17 compatibility and all 57 model checks passed during modernization. Automated checks do not verify desktop rendering, focus navigation, or physical keyboard behavior. Manually verify those features by launching the application, resizing the window, navigating the controls with Tab, and comparing mouse input with keyboard input.
+Compilation with Java 17 compatibility and all 92 model checks passed during modernization. Automated checks do not verify desktop rendering, focus navigation, or physical keyboard behavior. Manually verify those features by launching the application, resizing the window, navigating the controls with Tab, and comparing mouse input with keyboard input.
+
+### A. Lab Requirement Mapping
+
+| Lab requirement | Implementation and evidence |
+| --- | --- |
+| `Arithmetic.java` with Javadoc | Required class and four required public static arithmetic methods plus exponentiation; Javadoc validation passes |
+| Four arithmetic operations | Parser delegates to `Arithmetic`; regression checks cover each operation |
+| Integer-only calculations | `BigInteger` throughout evaluation; no decimal key or binding |
+| Truncated integer division | Positive and negative quotient tests, including `5÷2 = 2` |
+| Negative numbers | Contextual unary minus and signed live operand display |
+| Division by zero | Error display and clear, delete, or new-input recovery |
+| Double-clicking operators | Repeated addition, multiplication, division, and minus sequences verified |
+| Reset | `AC`, Escape, or Delete resets all model state |
+| Driver with GUI components and listeners | `Calculator.java` owns Swing construction and command actions |
+| Required runnable files | Six source files listed below; desktop validation remains a manual check |
+
+A repeated minus denotes subtraction of a negative operand, such as `2−−3 = 5`. Incomplete or out-of-order expressions display an error rather than terminating the application.
+
+To generate and validate the required arithmetic documentation:
+
+```bash
+javadoc -Xdoclint:all -d out/javadoc Arithmetic.java
+```
+
+For submission, include the source files and README. The lab recommends a ZIP of the project folder; exclude generated output and IDE metadata. The lab PDF remains the assignment reference.
 
 ## VI. Project Organization
 
 | File | Purpose |
 | --- | --- |
 | `Calculator.java` | Swing interface, styling, actions, and keyboard bindings |
-| `CalculatorModel.java` | Input state and decimal arithmetic |
+| `CalculatorModel.java` | Input editing, operand display, completion state, and errors |
+| `ExpressionEvaluator.java` | Expression grammar, parentheses, precedence, and evaluation dispatch |
+| `CalculatorButton.java` | Rounded painting and centralized key color styles |
+| `Arithmetic.java` | Required arithmetic utility with four required Javadoc-documented integer operations and exponentiation |
 | `CalculatorModelTest.java` | Executable model regression checks |
 | `Lab1(IntegerCalculator).pdf` | Original lab document |
 | `README.md` | Design, operation, and verification documentation |
 
 ## VII. Limitations and Future Work
 
-The application does not implement scientific functions, persistent history, or repeat-equals evaluation. The input limit applies to typed digits rather than computed result length. Results may exceed the visible display width. Potential extensions include calculation history and additional desktop accessibility testing.
+The application does not implement decimal arithmetic, percentages, scientific functions, persistent history, or repeat-equals evaluation. Input limits apply to entered digits and expression length rather than computed result length. Results may exceed the visible display width. Potential extensions include calculation history and additional desktop accessibility testing.

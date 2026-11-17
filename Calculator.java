@@ -1,20 +1,15 @@
-import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
 import java.awt.GridLayout;
-import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
-import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -28,7 +23,6 @@ import javax.swing.SwingUtilities;
 public final class Calculator {
     private static final Color BACKGROUND = new Color(18, 22, 31);
     private static final Color MUTED = new Color(153, 166, 187);
-    private static final Color ACCENT = new Color(153, 198, 255);
     private final CalculatorModel model = new CalculatorModel();
     private final JTextField display = new JTextField("0");
     private final JLabel expression = new JLabel(" ", SwingConstants.RIGHT);
@@ -92,31 +86,19 @@ public final class Calculator {
     private JPanel createKeypad(JPanel content) {
         JPanel keypad = new JPanel(new GridLayout(5, 4, 10, 10));
         keypad.setOpaque(false);
-        String[] commands = {"C", "(", ")", "÷", "7", "8", "9", "×",
-                "4", "5", "6", "−", "1", "2", "3", "+", "AC", "0", ".", "="};
+        String[] commands = {"xʸ", "(", ")", "÷", "7", "8", "9", "×",
+                "4", "5", "6", "−", "1", "2", "3", "+", "AC", "0", "⌫", "="};
         for (String command : commands) {
-            Color color = new Color(48, 52, 62);
-            if (command.matches("[0-9]")) {
-                color = new Color(255, 128, 41);
-            } else if (command.equals("C")) {
-                color = new Color(48, 120, 255);
-            } else if (command.equals("AC")) {
-                color = new Color(255, 45, 120);
-            } else if (command.equals("=")) {
-                color = new Color(255, 211, 137);
-            } else if ("+−×÷".contains(command)) {
-                color = new Color(62, 52, 39);
-            }
-            RoundedButton button = new RoundedButton(command, color);
+            CalculatorButton button = new CalculatorButton(command);
             button.setAction(new CommandAction(command));
             button.getAccessibleContext().setAccessibleName(accessibleName(command));
             keypad.add(button);
-            if (command.matches("[0-9.]")) {
+            if (command.matches("[0-9]")) {
                 bind(content, "typed " + command, command);
             }
         }
-        String[][] shortcuts = {{"typed +", "+"}, {"typed -", "−"}, {"typed *", "×"},
-                {"typed /", "÷"}, {"typed %", "%"}, {"typed =", "="},
+        String[][] shortcuts = {{"typed ^", "^"}, {"typed +", "+"}, {"typed -", "−"}, {"typed *", "×"},
+                {"typed /", "÷"}, {"typed =", "="},
                 {"ENTER", "="}, {"ESCAPE", "AC"}, {"BACK_SPACE", "⌫"},
                 {"DELETE", "AC"}, {"typed (", "("}, {"typed )", ")"}};
         for (String[] shortcut : shortcuts) {
@@ -129,7 +111,8 @@ public final class Calculator {
     private String accessibleName(String command) {
         return switch (command) {
             case "AC" -> "Clear all";
-            case "C", "⌫" -> "Delete last character";
+            case "xʸ" -> "Raise to a power";
+            case "⌫" -> "Delete last character";
             case "(" -> "Open parenthesis";
             case ")" -> "Close parenthesis";
             case "÷" -> "Divide";
@@ -137,8 +120,6 @@ public final class Calculator {
             case "−" -> "Subtract or negate";
             case "+" -> "Add";
             case "=" -> "Equals";
-            case "%" -> "Percent";
-            case "." -> "Decimal point";
             default -> command;
         };
     }
@@ -182,53 +163,6 @@ public final class Calculator {
         public void actionPerformed(ActionEvent event) {
             model.accept((String) getValue(NAME));
             refresh();
-        }
-    }
-
-    /** Paints rounded keys with hover, pressed, and keyboard-focus feedback. */
-    private static final class RoundedButton extends JButton {
-        private static final long serialVersionUID = 1L;
-        private final Color fill;
-
-        /** Configures a native Swing button with a custom rounded background. */
-        RoundedButton(String text, Color fill) {
-            super(text);
-            this.fill = fill;
-            setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 24));
-            if (text.matches("[0-9]") || text.equals("=") || text.equals("C") || text.equals("AC")) {
-                setForeground(BACKGROUND);
-            } else if ("+−×÷".contains(text)) {
-                setForeground(new Color(255, 211, 137));
-            } else {
-                setForeground(Color.WHITE);
-            }
-            setContentAreaFilled(false);
-            setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-            setFocusPainted(false);
-            setRolloverEnabled(true);
-            setOpaque(false);
-        }
-
-        /** Draws smooth key surfaces and a visible focus indicator before the label. */
-        @Override
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D canvas = (Graphics2D) graphics.create();
-            canvas.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            Color background = fill;
-            if (getModel().isPressed()) {
-                background = fill.darker();
-            } else if (getModel().isRollover()) {
-                background = fill.brighter();
-            }
-            canvas.setColor(background);
-            canvas.fillRoundRect(1, 1, getWidth() - 2, getHeight() - 2, 24, 24);
-            if (isFocusOwner()) {
-                canvas.setColor(ACCENT);
-                canvas.setStroke(new BasicStroke(2));
-                canvas.drawRoundRect(2, 2, getWidth() - 4, getHeight() - 4, 24, 24);
-            }
-            canvas.dispose();
-            super.paintComponent(graphics);
         }
     }
 }

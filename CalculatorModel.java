@@ -1,8 +1,6 @@
-import java.math.BigDecimal;
-import java.math.MathContext;
-
-/** Edits arithmetic expressions and evaluates parentheses, precedence, and unary minus. */
+/** Manages calculator input, operand display, completion state, and recoverable errors. */
 final class CalculatorModel {
+    private static final int MAX_EXPRESSION_LENGTH = 256;
     private String input = "";
     private String display = "0";
     private String expression = "";
@@ -16,35 +14,39 @@ final class CalculatorModel {
 
     /** Returns the entered expression, including equals after successful evaluation. */
     String getExpression() {
-        return expression;
+        return completed || error ? expression : input;
     }
 
     /** Applies one shared keyboard or keypad command. */
     void accept(String command) {
+        if (command.equals("xʸ")) {
+            command = "^";
+        }
         if (command.equals("AC")) {
             clear();
-        } else if (command.equals("C") || command.equals("⌫")) {
+        } else if (command.equals("⌫")) {
             deleteCharacter();
-        } else if (command.matches("[0-9.(]")) {
+        } else if (command.matches("[0-9(]")) {
             if (completed || error) {
                 clear();
             }
-            enterValue(command);
-        } else if (!error) {
+            if (input.length() < MAX_EXPRESSION_LENGTH) {
+                enterValue(command);
+            }
+        } else if (!error && !command.equals(".") && !command.equals("%")) {
             if (command.equals("=")) {
                 finish();
-            } else if (command.matches("[+−×÷)%]")) {
+            } else if (command.matches("[+−×÷)^]")) {
                 if (completed) {
-                    input = display;
+                    input = display.replace('-', '−');
                     completed = false;
                 }
-                enterSymbol(command);
+                if (input.length() < MAX_EXPRESSION_LENGTH) {
+                    enterSymbol(command);
+                }
             } else {
                 throw new IllegalArgumentException("Unknown command: " + command);
             }
-        }
-        if (!completed && !error) {
-            expression = input;
         }
     }
 
@@ -67,28 +69,22 @@ final class CalculatorModel {
         }
     }
 
-    /** Enters digits, decimal points, or explicit opening parentheses with a digit limit. */
+    /** Enters integer digits or opening parentheses, limiting operands to sixteen digits. */
     private void enterValue(String command) {
         String operand = trailingNumber();
         if (command.equals("(")) {
             input += command;
-        } else if (!input.endsWith(")") && !input.endsWith("%")) {
-            if (command.equals(".")) {
-                if (!operand.contains(".")) {
-                    input += operand.isEmpty() ? "0." : ".";
-                }
-            } else if (operand.replace(".", "").length() < 16) {
-                if (operand.equals("0")) {
-                    input = input.substring(0, input.length() - 1) + command;
-                } else {
-                    input += command;
-                }
+        } else if (!input.endsWith(")") && operand.length() < 16) {
+            if (operand.equals("0")) {
+                input = input.substring(0, input.length() - 1) + command;
+            } else {
+                input += command;
             }
         }
         updateOperand();
     }
 
-    /** Handles closing groups, percentages, binary operators, and contextual unary minus. */
+    /** Handles closing groups, binary operators, and contextual unary minus. */
     private void enterSymbol(String command) {
         if (command.equals(")")) {
             int balance = 0;
@@ -102,29 +98,25 @@ final class CalculatorModel {
             if (!expectsOperand() && balance > 0) {
                 input += command;
             }
-        } else if (command.equals("%")) {
-            if (!expectsOperand()) {
-                input += command;
-            }
         } else if (command.equals("−")) {
             input += command;
             updateOperand();
         } else if (!expectsOperand()) {
             input += command;
-        } else if (!input.isEmpty() && "+×÷".contains(input.substring(input.length() - 1))) {
+        } else if (!input.isEmpty() && "+×÷^".contains(input.substring(input.length() - 1))) {
             input = input.substring(0, input.length() - 1) + command;
         }
     }
 
     /** Reports whether the expression requires a number, unary minus, or opening group. */
     private boolean expectsOperand() {
-        return input.isEmpty() || "(+−×÷".contains(input.substring(input.length() - 1));
+        return input.isEmpty() || "(+−×÷^".contains(input.substring(input.length() - 1));
     }
 
-    /** Extracts the currently entered unsigned decimal operand. */
+    /** Extracts the currently entered unsigned integer operand. */
     private String trailingNumber() {
         int start = input.length();
-        while (start > 0 && (Character.isDigit(input.charAt(start - 1)) || input.charAt(start - 1) == '.')) {
+        while (start > 0 && Character.isDigit(input.charAt(start - 1))) {
             start--;
         }
         return input.substring(start);
@@ -134,33 +126,38 @@ final class CalculatorModel {
     private void updateOperand() {
         String operand = trailingNumber();
         int signEnd = input.length() - operand.length();
-        int signStart = signEnd;
-        while (signStart > 0 && input.charAt(signStart - 1) == '−') {
-            signStart--;
-        }
-        int unarySigns = signEnd - signStart;
-        if (unarySigns > 0 && signStart > 0
-                && "0123456789.)%".indexOf(input.charAt(signStart - 1)) >= 0) {
-            unarySigns--;
-        }
+        int unarySigns = signEnd - unaryStart(signEnd);
         if (!operand.isEmpty() || unarySigns > 0) {
             display = (unarySigns % 2 == 0 ? "" : "-") + (operand.isEmpty() ? "0" : operand);
-        } else if (input.isEmpty()) {
+        } else if (expectsOperand()) {
             display = "0";
         }
+    }
+
+    /** Locates unary minus signs before an operand, excluding a binary subtraction sign. */
+    private int unaryStart(int numberStart) {
+        int start = numberStart;
+        while (start > 0 && input.charAt(start - 1) == '−') {
+            start--;
+        }
+        if (start < numberStart && start > 0
+                && "0123456789)".indexOf(input.charAt(start - 1)) >= 0) {
+            start++;
+        }
+        return start;
     }
 
     /** Evaluates a complete expression and preserves its equals sign above the result. */
     private void finish() {
         if (!input.isEmpty() && !completed) {
             try {
-                display = new ExpressionParser(input).parse().stripTrailingZeros().toPlainString();
+                display = ExpressionEvaluator.evaluate(input).toString();
                 expression = input + " =";
                 completed = true;
             } catch (ArithmeticException exception) {
                 showError("Cannot divide by zero");
             } catch (IllegalArgumentException exception) {
-                showError("Incomplete or invalid expression");
+                showError(exception.getMessage());
             }
         }
     }
@@ -170,103 +167,5 @@ final class CalculatorModel {
         display = "Error";
         expression = message;
         error = true;
-    }
-
-    /** Parses decimal expressions with conventional precedence and nested groups. */
-    private static final class ExpressionParser {
-        private final String source;
-        private int position;
-
-        /** Associates a parser with one immutable expression. */
-        ExpressionParser(String source) {
-            this.source = source;
-        }
-
-        /** Evaluates the whole expression and rejects unmatched or trailing input. */
-        BigDecimal parse() {
-            BigDecimal value = sum();
-            if (position != source.length()) {
-                throw new IllegalArgumentException("Unexpected input");
-            }
-            return value;
-        }
-
-        /** Evaluates addition and subtraction after higher-precedence operations. */
-        private BigDecimal sum() {
-            BigDecimal value = product();
-            while (position < source.length() && "+−".indexOf(source.charAt(position)) >= 0) {
-                char operator = source.charAt(position++);
-                BigDecimal operand = product();
-                if (operator == '+') {
-                    value = value.add(operand);
-                } else {
-                    value = value.subtract(operand);
-                }
-            }
-            return value;
-        }
-
-        /** Evaluates explicit or implicit multiplication and decimal division from left to right. */
-        private BigDecimal product() {
-            BigDecimal value = unary();
-            while (position < source.length() && "×÷(".indexOf(source.charAt(position)) >= 0) {
-                char operator = source.charAt(position);
-                if (operator != '(') {
-                    position++;
-                }
-                BigDecimal operand = unary();
-                if (operator == '÷') {
-                    value = value.divide(operand, MathContext.DECIMAL64);
-                } else {
-                    value = value.multiply(operand);
-                }
-            }
-            return value;
-        }
-
-        /** Evaluates contextual unary minus before returning to binary arithmetic. */
-        private BigDecimal unary() {
-            BigDecimal value;
-            if (take('−')) {
-                value = unary().negate();
-            } else {
-                value = primary();
-            }
-            return value;
-        }
-
-        /** Reads a decimal or parenthesized expression followed by optional percentages. */
-        private BigDecimal primary() {
-            BigDecimal value;
-            if (take('(')) {
-                value = sum();
-                if (!take(')')) {
-                    throw new IllegalArgumentException("Unclosed parenthesis");
-                }
-            } else {
-                int start = position;
-                while (position < source.length()
-                        && (Character.isDigit(source.charAt(position)) || source.charAt(position) == '.')) {
-                    position++;
-                }
-                if (start == position) {
-                    throw new IllegalArgumentException("Expected operand");
-                }
-                value = new BigDecimal(source.substring(start, position));
-            }
-            while (take('%')) {
-                value = value.movePointLeft(2);
-            }
-            return value;
-        }
-
-        /** Consumes an expected character when it is the next input symbol. */
-        private boolean take(char symbol) {
-            boolean matches = position < source.length() && source.charAt(position) == symbol;
-            if (matches) {
-                position++;
-            }
-            return matches;
-        }
     }
 }
